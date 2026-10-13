@@ -6,7 +6,7 @@ SP Launcher replaces your phone's home screen with a calm, distraction-free one:
 
 ## Download
 
-**Latest: v1.5** — grab `app-debug.apk` from the [Releases](../../releases) page.
+**Latest: v1.6** — grab `app-debug.apk` from the [Releases](../../releases) page.
 
 To install: download the APK, allow "install unknown apps" for your browser or file manager, and open the file.
 
