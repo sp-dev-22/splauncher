@@ -2,15 +2,31 @@
 
 A minimalist, student-friendly Android launcher — built with Kotlin and Jetpack Compose.
 
-SP Launcher replaces your phone's home screen with a calm, distraction-free one: a clean clock, your favourite apps as colourful text pills, small Notes / Reminders / Goals / Tasks widgets, and a built-in **Focus Mode** that silences notifications and blocks distracting apps while you study.
+SP Launcher replaces your phone's home screen with a calm, distraction-free one: a clean clock, your favourite apps as colourful text pills, small widgets, a full Study Manager, and a built-in **Focus Mode** that silences notifications and blocks distracting apps while you study.
+
+## Download
+
+**Latest: v1.5** — grab `app-debug.apk` from the [Releases](../../releases) page.
+
+To install: download the APK, allow "install unknown apps" for your browser or file manager, and open the file.
 
 ## Features
 
 - **Three-page home** — Settings · Home · App Drawer, swiped left and right.
-- **Focus Mode** — a floating Pomodoro timer that keeps running over other apps, silences notifications, and blocks apps you have not allowed.
-- **Daily app limits** — set a daily time budget per app; when it runs out, the app is locked for the day.
-- **Widgets** — clock and date, plus swipeable Notes, Reminders and Goals cards and a Tasks checklist.
-- **Badges & focus history** — milestones for your study sessions, and a log of past sessions.
+- **Study Manager** — a Course > Subject > Topic > Class tree with deadlines, two-level reminders (a simple alert and a "deadline missed" nudge), per-topic study minutes and a colour-coded progress graph. Start a Focus session straight from a topic or class.
+- **Focus Mode** — a floating Pomodoro timer that keeps running over other apps, silences notifications and blocks apps you haven't allowed. Session minutes are logged to the topic you were studying, and you get a one-tap "mark done" when a session ends.
+- **Notes** — one swipeable Notes widget. Tag each item with Note / Reminder / Goal, or type your own custom tag.
+- **Widgets** — clock & date, a Study "due today / overdue" card, a swipeable Tasks checklist, and Screen Time + Focused Time for today. Hide any widget from Settings.
+- **Daily app limits** — a daily time budget per app, which resets every night at 23:59.
+- **Themes** — Default, Pink, Green, Saffron and Seattle, each with a light and a dark (night) palette.
+- **Backup & Restore** — export everything to a file and restore it, or let it auto-backup weekly to a folder you choose.
+- **Daily study summary** — one notification a day with what's due, overdue and how long you studied.
+
+## Support & Contact
+
+- **WhatsApp:** [@somdatt.smiles](https://wa.me/somdatt.smiles) — support, feedback, bug reports.
+- **GitHub:** [@sp-dev-22](https://github.com/sp-dev-22) — download more apps.
+- **Support our project:** [github.com/sp-dev-22/splauncher](https://github.com/sp-dev-22/splauncher) — a star is appreciated.
 
 ## Tech
 
@@ -20,9 +36,7 @@ SP Launcher replaces your phone's home screen with a calm, distraction-free one:
 
 ## Building an APK
 
-A GitHub Actions workflow (`.github/workflows/build-apk.yml`) builds an installable **debug APK** on every push to `main`, and can also be run manually from the **Actions** tab. The APK is attached to the `apk-latest` release for a direct download.
-
-To install: download `app-debug.apk`, allow "install unknown apps" for your browser or file manager, and open the file to install.
+A GitHub Actions workflow (`.github/workflows/build-apk.yml`) builds an installable **debug APK** on every push to `main`, and can also be run manually from the **Actions** tab.
 
 ## About the developer
 
