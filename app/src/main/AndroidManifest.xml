@@ -5,23 +5,14 @@
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesCondition" />
 
-    <!-- Overlay permission for floating Pomodoro timer & block overlay -->
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- Required on Android 11+ (API 30+) to launch the system uninstall dialog for an app. -->
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
 
-    <!-- DND / Notification policy access for silencing notifications -->
-    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
-
-    <!-- Usage stats permission for tracking screen time and daily limits -->
-    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
-        tools:ignore="ProtectedPermissions" />
-
-    <!-- Foreground service for continuous timer operation -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
-    <uses-permission android:name="android.permission.VIBRATE" />
-
-    <!-- Notifications (Android 13+): required for the focus timer / app-limits notification -->
+    <!-- Notifications (Android 13+): required for Alerts and Study reminders -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Re-arm Alerts and Study Manager reminders after a reboot -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:allowBackup="true"
@@ -50,14 +41,25 @@
             </intent-filter>
         </activity>
 
-        <service
-            android:name=".service.FocusOverlayService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Pomodoro focus timer overlay" />
-        </service>
+        <!-- Fires Study Manager alert / missed-deadline notifications -->
+        <receiver
+            android:name=".service.StudyReminderReceiver"
+            android:exported="false" />
+
+        <!-- Fires Alerts reminder notifications -->
+        <receiver
+            android:name=".service.AlertReminderReceiver"
+            android:exported="false" />
+
+        <!-- Re-schedules Alerts and Study Manager reminders after boot / app update -->
+        <receiver
+            android:name=".service.BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
     </application>
 

@@ -19,30 +19,24 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.HourglassTop
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.example.data.model.AlertItem
 import com.example.data.model.AppInfo
-import com.example.data.model.Badge
-import com.example.data.model.BannerItem
+import com.example.data.model.StudyDueItem
 import com.example.data.model.TaskItem
 import com.example.ui.components.AppFavoriteChip
-import com.example.ui.components.CategorySwipeWidget
+import com.example.ui.components.AlertsWidget
 import com.example.ui.components.ClockWidget
-import com.example.ui.components.LatestBadgeBanner
 import com.example.ui.components.TasksWidget
+import com.example.ui.components.StudyDueWidget
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
@@ -50,25 +44,19 @@ fun HomeScreen(
     favoriteApps: List<AppInfo>,
     showTime: Boolean,
     showDate: Boolean,
-    showNotes: Boolean,
-    showReminders: Boolean,
-    showGoals: Boolean,
+    showAlerts: Boolean,
     showTasks: Boolean,
-    isFocusModeActive: Boolean,
-    notes: List<BannerItem>,
-    reminders: List<BannerItem>,
-    goals: List<BannerItem>,
+    alerts: List<AlertItem>,
     tasks: List<TaskItem>,
-    latestBadge: Badge?,
-    completedSessions: Int,
+    showStudyDue: Boolean,
+    studyDueItems: List<StudyDueItem>,
     isDarkTheme: Boolean,
     onAppClick: (AppInfo) -> Unit,
     onAppLongClick: (AppInfo) -> Unit,
     onToggleTask: (String) -> Unit,
     onAddTask: (String) -> Unit,
     onOpenWidgetsManagement: () -> Unit,
-    onPromptEndFocus: () -> Unit,
-    onOpenBadgesSheet: () -> Unit,
+    onOpenStudyManager: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -88,93 +76,39 @@ fun HomeScreen(
         ) {
             Spacer(modifier = Modifier.height(10.dp))
 
-            // 1. Latest Badge shown at top of Home Screen
-            LatestBadgeBanner(
-                badge = latestBadge,
-                completedSessions = completedSessions,
-                onClick = onOpenBadgesSheet
-            )
-
-            // 2. Digital Clock & Date Widget
+            // Digital Clock & Date Widget
             ClockWidget(
                 showTime = showTime,
                 showDate = showDate,
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // Focus Mode Active Banner
-            // Long press for 3s / click prompts confirmation to close session early
-            if (isFocusModeActive) {
-                Spacer(modifier = Modifier.height(6.dp))
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(Color(0xFFE53935).copy(alpha = 0.15f))
-                        .combinedClickable(
-                            onClick = onPromptEndFocus,
-                            onLongClick = onPromptEndFocus
-                        )
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
-                        .testTag("home_focus_mode_indicator")
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.HourglassTop,
-                            contentDescription = null,
-                            tint = Color(0xFFE53935),
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "Focus Mode Active • Long-press 3s to end",
-                            color = Color(0xFFE53935),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
+            // Study classes due today / overdue
+            if (showStudyDue && studyDueItems.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                StudyDueWidget(
+                    items = studyDueItems,
+                    isDarkTheme = isDarkTheme,
+                    onOpenStudyManager = onOpenStudyManager,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // 3. Separate Swipeable Widget for Notes
-            if (showNotes) {
-                CategorySwipeWidget(
-                    category = "Note",
-                    items = notes,
+            // Alerts widget (with custom tags + optional reminders) - hidden when empty
+            if (showAlerts && alerts.isNotEmpty()) {
+                AlertsWidget(
+                    items = alerts,
                     isDarkTheme = isDarkTheme,
-                    onManageCategory = onOpenWidgetsManagement,
+                    onManage = onOpenWidgetsManagement,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            // 4. Separate Swipeable Widget for Reminders
-            if (showReminders) {
-                CategorySwipeWidget(
-                    category = "Reminder",
-                    items = reminders,
-                    isDarkTheme = isDarkTheme,
-                    onManageCategory = onOpenWidgetsManagement,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-
-            // 5. Separate Swipeable Widget for Goals
-            if (showGoals) {
-                CategorySwipeWidget(
-                    category = "Goal",
-                    items = goals,
-                    isDarkTheme = isDarkTheme,
-                    onManageCategory = onOpenWidgetsManagement,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-
-            // 6. Interactive Tasks Widget
-            if (showTasks) {
+            // Interactive Tasks Widget (hidden when there are no tasks)
+            if (showTasks && tasks.isNotEmpty()) {
                 TasksWidget(
                     tasks = tasks,
                     isDarkTheme = isDarkTheme,
@@ -187,7 +121,7 @@ fun HomeScreen(
             }
         }
 
-        // 7. Favorite Apps (Colorful Text Pills)
+        // Favorite Apps (Colorful Text Pills)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -202,7 +136,7 @@ fun HomeScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = if (isFocusModeActive) "Only allowed apps are shown in Focus Mode" else "Swipe right to App Drawer\nor open Settings to add Favorite apps",
+                        text = "Swipe right to App Drawer\nor open Settings to add Favorite apps",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
                         textAlign = TextAlign.Center

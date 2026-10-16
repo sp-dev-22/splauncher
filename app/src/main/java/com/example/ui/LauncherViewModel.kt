@@ -3,37 +3,33 @@ package com.example.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.model.AlertItem
 import com.example.data.model.AppInfo
-import com.example.data.model.Badge
-import com.example.data.model.BannerItem
-import com.example.data.model.FocusSessionRecord
+import com.example.data.model.StudyCourse
+import com.example.data.model.StudyDueItem
 import com.example.data.model.TaskItem
+import com.example.data.model.allClassRefs
 import com.example.data.repository.AppRepository
 import com.example.data.repository.LauncherPreferences
-import com.example.focus.FocusManager
-import com.example.focus.UsageTracker
-import com.example.ui.components.BlockReason
+import com.example.data.model.SubjectPlanSettings
+import com.example.data.model.TimeTableSettings
+import com.example.service.AlertReminderScheduler
+import com.example.service.StudyReminderScheduler
+import com.example.util.TimeTablePlanner
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-
-data class FocusFilterState(
-    val isFocus: Boolean,
-    val isBreak: Boolean,
-    val allowedApps: Set<String>,
-    val shouldHide: Boolean
-)
+import java.util.Calendar
 
 class LauncherViewModel(application: Application) : AndroidViewModel(application) {
 
     private val appRepository = AppRepository(application)
     private val preferences = LauncherPreferences(application)
-    private val focusManager = FocusManager(application)
-    private val usageTracker = UsageTracker(application)
 
     private val _installedApps = MutableStateFlow<List<AppInfo>>(emptyList())
     val installedApps: StateFlow<List<AppInfo>> = _installedApps.asStateFlow()
@@ -45,56 +41,52 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     val favorites = preferences.favorites
     val showTime = preferences.showTime
     val showDate = preferences.showDate
-    val showNotes = preferences.showNotes
-    val showReminders = preferences.showReminders
-    val showGoals = preferences.showGoals
+    val showAlerts = preferences.showAlerts
     val showTasks = preferences.showTasks
-    val banners = preferences.banners
+    val showStudyDue = preferences.showStudyDue
+    val themeKey = preferences.themeKey
+    val alerts = preferences.alerts
     val tasks = preferences.tasks
+    val timeTable = preferences.timeTable
 
-    // Categorized lists for separate Notes, Reminders, and Goals widgets
-    val notesList: StateFlow<List<BannerItem>> = banners.combine(banners) { list, _ ->
-        list.filter { it.category.equals("Note", ignoreCase = true) }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    // Study Manager tree
+    val studyCourses: StateFlow<List<StudyCourse>> = preferences.studyCourses
 
-    val remindersList: StateFlow<List<BannerItem>> = banners.combine(banners) { list, _ ->
-        list.filter { it.category.equals("Reminder", ignoreCase = true) }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    // Study classes overdue, due today, or due within the next 7 days (Home "Due" card)
+    val studyDueItems: StateFlow<List<StudyDueItem>> = studyCourses
+        .map { courses -> computeStudyDue(courses) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val goalsList: StateFlow<List<BannerItem>> = banners.combine(banners) { list, _ ->
-        list.filter { it.category.equals("Goal", ignoreCase = true) }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private fun computeStudyDue(courses: List<StudyCourse>): List<StudyDueItem> {
+        val now = System.currentTimeMillis()
+        val endOfWindow = endOfWindowMillis()
+        val items = mutableListOf<StudyDueItem>()
+        for (course in courses) {
+            for (ref in course.allClassRefs()) {
+                if (ref.clazz.isCompleted) continue
+                val deadline = ref.clazz.deadlineMillis ?: continue
+                val overdue = deadline < now
+                val withinWindow = deadline in now..endOfWindow
+                if (overdue || withinWindow) {
+                    items.add(StudyDueItem("${ref.topic.name} · ${ref.clazz.name}", deadline, overdue))
+                }
+            }
+        }
+        return items.sortedBy { it.deadlineMillis }
+    }
 
-    // Focus Mode states
-    val isFocusModeActive = preferences.isFocusModeActive
-    val isFocusBreakPhase = preferences.isFocusBreakPhase
-    val studyDurationMinutes = preferences.studyDurationMinutes
-    val breakDurationMinutes = preferences.breakDurationMinutes
-    val longBreakDurationMinutes = preferences.longBreakDurationMinutes
-    val targetSessions = preferences.targetSessions
-    val allowedFocusApps = preferences.allowedFocusApps
-    val hideBlockedApps = preferences.hideBlockedApps
-
-    // App Usage & Limits states
-    val appLimits = preferences.appLimits
-    private val _usageMap = MutableStateFlow<Map<String, Int>>(emptyMap())
-    val usageMap: StateFlow<Map<String, Int>> = _usageMap.asStateFlow()
-
-    // Badges & Milestones
-    val completedSessionsCount = preferences.completedSessionsCount
-    val totalFocusMinutes = preferences.totalFocusMinutes
-    val latestBadge = preferences.latestBadge
-    val unlockedBadges = preferences.unlockedBadges
-
-    // Focus History
-    val focusHistory: StateFlow<List<FocusSessionRecord>> = preferences.focusHistory
+    /** End of the day six days from now, i.e. the last moment of the "next 7 days" window. */
+    private fun endOfWindowMillis(): Long = Calendar.getInstance().apply {
+        add(Calendar.DAY_OF_YEAR, 6)
+        set(Calendar.HOUR_OF_DAY, 23)
+        set(Calendar.MINUTE, 59)
+        set(Calendar.SECOND, 59)
+        set(Calendar.MILLISECOND, 999)
+    }.timeInMillis
 
     // Dialog & Sheet States
     private val _selectedAppForActions = MutableStateFlow<AppInfo?>(null)
     val selectedAppForActions: StateFlow<AppInfo?> = _selectedAppForActions.asStateFlow()
-
-    private val _showArrangeSheet = MutableStateFlow(false)
-    val showArrangeSheet: StateFlow<Boolean> = _showArrangeSheet.asStateFlow()
 
     private val _showAddFavoritesScreen = MutableStateFlow(false)
     val showAddFavoritesScreen: StateFlow<Boolean> = _showAddFavoritesScreen.asStateFlow()
@@ -102,77 +94,37 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val _showWidgetsDialog = MutableStateFlow(false)
     val showWidgetsDialog: StateFlow<Boolean> = _showWidgetsDialog.asStateFlow()
 
-    private val _showFocusSettingsDialog = MutableStateFlow(false)
-    val showFocusSettingsDialog: StateFlow<Boolean> = _showFocusSettingsDialog.asStateFlow()
+    private val _showStudyManager = MutableStateFlow(false)
+    val showStudyManager: StateFlow<Boolean> = _showStudyManager.asStateFlow()
 
-    private val _showFocusHistorySheet = MutableStateFlow(false)
-    val showFocusHistorySheet: StateFlow<Boolean> = _showFocusHistorySheet.asStateFlow()
+    private val _showBackupRestore = MutableStateFlow(false)
+    val showBackupRestore: StateFlow<Boolean> = _showBackupRestore.asStateFlow()
 
-    private val _showAllowedAppsSheet = MutableStateFlow(false)
-    val showAllowedAppsSheet: StateFlow<Boolean> = _showAllowedAppsSheet.asStateFlow()
+    private val _showThemesSheet = MutableStateFlow(false)
+    val showThemesSheet: StateFlow<Boolean> = _showThemesSheet.asStateFlow()
 
-    private val _showAppLimitsSheet = MutableStateFlow(false)
-    val showAppLimitsSheet: StateFlow<Boolean> = _showAppLimitsSheet.asStateFlow()
+    private val _showTimeTable = MutableStateFlow(false)
+    val showTimeTable: StateFlow<Boolean> = _showTimeTable.asStateFlow()
 
-    private val _showBadgesSheet = MutableStateFlow(false)
-    val showBadgesSheet: StateFlow<Boolean> = _showBadgesSheet.asStateFlow()
-
-    private val _showEndFocusConfirmDialog = MutableStateFlow(false)
-    val showEndFocusConfirmDialog: StateFlow<Boolean> = _showEndFocusConfirmDialog.asStateFlow()
-
-    private val _blockedAppDetails = MutableStateFlow<Pair<AppInfo, BlockReason>?>(null)
-    val blockedAppDetails: StateFlow<Pair<AppInfo, BlockReason>?> = _blockedAppDetails.asStateFlow()
-
-    // Combined focus filter state flow
-    private val focusFilterState = combine(
-        isFocusModeActive,
-        isFocusBreakPhase,
-        allowedFocusApps,
-        hideBlockedApps
-    ) { isFocus, isBreak, allowedList, shouldHide ->
-        FocusFilterState(
-            isFocus = isFocus,
-            isBreak = isBreak,
-            allowedApps = allowedList.toSet(),
-            shouldHide = shouldHide
-        )
-    }
-
-    // Filtered apps for Drawer: during Break phase, apps temporarily unhide and are accessible!
+    // Filtered apps for the App Drawer (search only)
     val filteredApps: StateFlow<List<AppInfo>> =
-        combine(_installedApps, _searchQuery, focusFilterState) { apps, query, focusState ->
-            var list = apps
-
-            // If focus mode is active, NOT in break phase, and hideBlockedApps is enabled: hide non-allowed apps
-            if (focusState.isFocus && !focusState.isBreak && focusState.shouldHide) {
-                list = list.filter { focusState.allowedApps.contains(it.packageName) }
-            }
-
-            if (query.isNotBlank()) {
-                list = list.filter { it.label.contains(query, ignoreCase = true) }
-            }
-            list
+        combine(_installedApps, _searchQuery) { apps, query ->
+            if (query.isBlank()) apps
+            else apps.filter { it.label.contains(query, ignoreCase = true) }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // Filtered favorites for Home Screen: during Break phase, apps unhide!
+    // Favorite apps for the Home Screen
     val favoriteAppInfos: StateFlow<List<AppInfo>> =
-        combine(_installedApps, favorites, focusFilterState) { apps, favPkgs, focusState ->
+        combine(_installedApps, favorites) { apps, favPkgs ->
             val appMap = apps.associateBy { it.packageName }
-            var favs = favPkgs.mapNotNull { appMap[it] }
-
-            if (focusState.isFocus && !focusState.isBreak && focusState.shouldHide) {
-                favs = favs.filter { focusState.allowedApps.contains(it.packageName) }
-            }
-            favs
+            favPkgs.mapNotNull { appMap[it] }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init {
         loadApps()
-        refreshUsageStats()
-        // Ensure background monitor is running if limits are set or focus mode was active
-        if (preferences.appLimits.value.isNotEmpty() || preferences.isFocusModeActive.value) {
-            focusManager.updateLimitMonitoring()
-        }
+        // Re-arm any pending Alerts and Study Manager reminders on launch.
+        rescheduleAlertReminders()
+        rescheduleStudyReminders()
     }
 
     fun loadApps() {
@@ -206,14 +158,6 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun refreshUsageStats() {
-        viewModelScope.launch {
-            if (usageTracker.hasUsageStatsPermission()) {
-                _usageMap.value = usageTracker.getTodayAppUsageMinutes()
-            }
-        }
-    }
-
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
     }
@@ -230,20 +174,20 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         preferences.setShowDate(enabled)
     }
 
-    fun setShowNotes(enabled: Boolean) {
-        preferences.setShowNotes(enabled)
-    }
-
-    fun setShowReminders(enabled: Boolean) {
-        preferences.setShowReminders(enabled)
-    }
-
-    fun setShowGoals(enabled: Boolean) {
-        preferences.setShowGoals(enabled)
+    fun setShowAlerts(enabled: Boolean) {
+        preferences.setShowAlerts(enabled)
     }
 
     fun setShowTasks(enabled: Boolean) {
         preferences.setShowTasks(enabled)
+    }
+
+    fun setShowStudyDue(enabled: Boolean) {
+        preferences.setShowStudyDue(enabled)
+    }
+
+    fun setTheme(key: String) {
+        preferences.setTheme(key)
     }
 
     fun addFavorite(packageName: String) {
@@ -274,20 +218,26 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         preferences.removeTask(id)
     }
 
-    fun addBanner(banner: BannerItem) {
-        preferences.addBanner(banner)
+    // ---- Alerts (with optional reminders) ----
+
+    fun addAlert(alert: AlertItem) {
+        preferences.addAlert(alert)
+        rescheduleAlertReminders()
     }
 
-    fun removeBanner(id: String) {
-        preferences.removeBanner(id)
+    fun updateAlert(alert: AlertItem) {
+        preferences.updateAlert(alert)
+        rescheduleAlertReminders()
+    }
+
+    fun removeAlert(id: String) {
+        AlertReminderScheduler.cancel(getApplication(), id)
+        preferences.removeAlert(id)
+        rescheduleAlertReminders()
     }
 
     fun selectAppForActions(app: AppInfo?) {
         _selectedAppForActions.value = app
-    }
-
-    fun setShowArrangeSheet(show: Boolean) {
-        _showArrangeSheet.value = show
     }
 
     fun setShowAddFavoritesScreen(show: Boolean) {
@@ -298,130 +248,24 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         _showWidgetsDialog.value = show
     }
 
-    fun setShowFocusSettingsDialog(show: Boolean) {
-        _showFocusSettingsDialog.value = show
+    fun setShowStudyManager(show: Boolean) {
+        _showStudyManager.value = show
     }
 
-    fun setShowFocusHistorySheet(show: Boolean) {
-        _showFocusHistorySheet.value = show
+    fun setShowBackupRestore(show: Boolean) {
+        _showBackupRestore.value = show
     }
 
-    fun setShowAllowedAppsSheet(show: Boolean) {
-        _showAllowedAppsSheet.value = show
+    fun setShowThemesSheet(show: Boolean) {
+        _showThemesSheet.value = show
     }
 
-    fun setShowAppLimitsSheet(show: Boolean) {
-        _showAppLimitsSheet.value = show
+    fun setShowTimeTable(show: Boolean) {
+        _showTimeTable.value = show
     }
 
-    fun setShowBadgesSheet(show: Boolean) {
-        _showBadgesSheet.value = show
-    }
-
-    fun setShowEndFocusConfirmDialog(show: Boolean) {
-        _showEndFocusConfirmDialog.value = show
-    }
-
-    fun dismissBlockedAppDialog() {
-        _blockedAppDetails.value = null
-    }
-
-    // Focus Mode methods
-    fun canDrawOverlays(): Boolean = focusManager.canDrawOverlays()
-
-    fun requestOverlayPermission() {
-        focusManager.requestOverlayPermission()
-    }
-
-    fun isNotificationPolicyAccessGranted(): Boolean = focusManager.isNotificationPolicyAccessGranted()
-
-    fun requestNotificationPolicyAccess() {
-        focusManager.requestNotificationPolicyAccess()
-    }
-
-    fun hasUsagePermission(): Boolean = usageTracker.hasUsageStatsPermission()
-
-    fun requestUsagePermission() {
-        usageTracker.requestUsageStatsPermission()
-    }
-
-    fun startFocusMode() {
-        focusManager.startFocusMode()
-    }
-
-    fun stopFocusMode() {
-        focusManager.stopFocusMode()
-        _showEndFocusConfirmDialog.value = false
-    }
-
-    fun toggleFocusMode() {
-        if (isFocusModeActive.value) {
-            stopFocusMode()
-        } else {
-            startFocusMode()
-        }
-    }
-
-    fun setStudyDurationMinutes(minutes: Int) {
-        preferences.setStudyDurationMinutes(minutes)
-    }
-
-    fun setBreakDurationMinutes(minutes: Int) {
-        preferences.setBreakDurationMinutes(minutes)
-    }
-
-    fun setLongBreakDurationMinutes(minutes: Int) {
-        preferences.setLongBreakDurationMinutes(minutes)
-    }
-
-    fun setTargetSessions(sessions: Int) {
-        preferences.setTargetSessions(sessions)
-    }
-
-    fun toggleAllowedFocusApp(packageName: String) {
-        preferences.toggleAllowedFocusApp(packageName)
-    }
-
-    fun setHideBlockedApps(enabled: Boolean) {
-        preferences.setHideBlockedApps(enabled)
-    }
-
-    fun setAppLimit(packageName: String, limitMinutes: Int) {
-        preferences.setAppLimit(packageName, limitMinutes)
-        // Ensure background monitor is actively running to enforce limits live
-        focusManager.updateLimitMonitoring()
-    }
-
-    fun getAllBadges(): List<Badge> = preferences.getAllBadges()
-
-    fun clearAllFocusHistory() {
-        preferences.clearAllFocusHistory()
-    }
-
-    fun clearFocusHistoryOlderThan(cutoffTimestamp: Long) {
-        preferences.clearFocusHistoryBefore(cutoffTimestamp)
-    }
-
-    // Smart App Launching: handles usage limit and focus mode blocking
-    fun tryLaunchApp(app: AppInfo) {
-        // 1. Check daily usage limit
-        val limit = appLimits.value[app.packageName] ?: 0
-        val used = _usageMap.value[app.packageName] ?: 0
-        if (limit > 0 && used >= limit) {
-            _blockedAppDetails.value = Pair(app, BlockReason.USAGE_LIMIT_EXCEEDED)
-            return
-        }
-
-        // 2. Check focus mode restriction (only when in Study phase, not in Break phase!)
-        if (isFocusModeActive.value && !isFocusBreakPhase.value) {
-            val allowedSet = allowedFocusApps.value.toSet()
-            if (!allowedSet.contains(app.packageName)) {
-                _blockedAppDetails.value = Pair(app, BlockReason.FOCUS_MODE_RESTRICTED)
-                return
-            }
-        }
-
-        // 3. Otherwise launch normally
+    // Smart App Launching (no usage limits any more — just launch)
+    fun launchApp(app: AppInfo) {
         appRepository.launchApp(app.packageName)
     }
 
@@ -433,4 +277,155 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         appRepository.uninstallApp(packageName)
     }
 
+    // ---------------------------------------------------------------------
+    // Study Manager
+    // ---------------------------------------------------------------------
+
+    fun addStudyCourse(name: String) {
+        preferences.addStudyCourse(name)
+        rescheduleStudyReminders()
+    }
+
+    fun addStudySubject(courseId: String, name: String) {
+        preferences.addStudySubject(courseId, name)
+        rescheduleStudyReminders()
+    }
+
+    fun addStudyTopic(courseId: String, subjectId: String, name: String) {
+        preferences.addStudyTopic(courseId, subjectId, name)
+        rescheduleStudyReminders()
+    }
+
+    fun addStudyClass(courseId: String, subjectId: String, topicId: String, name: String) {
+        preferences.addStudyClass(courseId, subjectId, topicId, name)
+        rescheduleStudyReminders()
+    }
+
+    fun toggleStudyClass(courseId: String, subjectId: String, topicId: String, classId: String) {
+        preferences.toggleStudyClass(courseId, subjectId, topicId, classId)
+        rescheduleStudyReminders()
+    }
+
+    fun deleteStudyCourse(courseId: String) {
+        preferences.deleteStudyCourse(courseId)
+        rescheduleStudyReminders()
+    }
+
+    fun deleteStudySubject(courseId: String, subjectId: String) {
+        preferences.deleteStudySubject(courseId, subjectId)
+        rescheduleStudyReminders()
+    }
+
+    fun deleteStudyTopic(courseId: String, subjectId: String, topicId: String) {
+        preferences.deleteStudyTopic(courseId, subjectId, topicId)
+        rescheduleStudyReminders()
+    }
+
+    fun deleteStudyClass(courseId: String, subjectId: String, topicId: String, classId: String) {
+        preferences.deleteStudyClass(courseId, subjectId, topicId, classId)
+        rescheduleStudyReminders()
+    }
+
+    // ---- Drag & drop reordering (moves an item among its siblings) ----
+
+    fun moveStudyCourse(courseId: String, direction: Int) = preferences.moveStudyCourse(courseId, direction)
+
+    fun moveStudySubject(courseId: String, subjectId: String, direction: Int) =
+        preferences.moveStudySubject(courseId, subjectId, direction)
+
+    fun moveStudyTopic(courseId: String, subjectId: String, topicId: String, direction: Int) =
+        preferences.moveStudyTopic(courseId, subjectId, topicId, direction)
+
+    fun moveStudyClass(courseId: String, subjectId: String, topicId: String, classId: String, direction: Int) =
+        preferences.moveStudyClass(courseId, subjectId, topicId, classId, direction)
+
+    fun setStudyTopicSchedule(
+        courseId: String, subjectId: String, topicId: String,
+        deadlineMillis: Long?, alertMillis: Long?
+    ) {
+        preferences.setStudyTopicSchedule(courseId, subjectId, topicId, deadlineMillis, alertMillis)
+        rescheduleStudyReminders()
+    }
+
+    fun setStudyClassSchedule(
+        courseId: String, subjectId: String, topicId: String, classId: String,
+        deadlineMillis: Long?, alertMillis: Long?
+    ) {
+        preferences.setStudyClassSchedule(courseId, subjectId, topicId, classId, deadlineMillis, alertMillis)
+        rescheduleStudyReminders()
+    }
+
+    fun renameStudyCourse(courseId: String, name: String) = preferences.renameStudyCourse(courseId, name)
+
+    fun renameStudySubject(courseId: String, subjectId: String, name: String) =
+        preferences.renameStudySubject(courseId, subjectId, name)
+
+    fun renameStudyTopic(courseId: String, subjectId: String, topicId: String, name: String) =
+        preferences.renameStudyTopic(courseId, subjectId, topicId, name)
+
+    fun renameStudyClass(courseId: String, subjectId: String, topicId: String, classId: String, name: String) =
+        preferences.renameStudyClass(courseId, subjectId, topicId, classId, name)
+
+    // ---------------------------------------------------------------------
+    // Quick Time Table
+    // ---------------------------------------------------------------------
+
+    fun setTimeTableWindow(startMinutes: Int, endMinutes: Int) {
+        val s = preferences.timeTable.value
+        preferences.saveTimeTable(s.copy(windowStartMinutes = startMinutes, windowEndMinutes = endMinutes))
+    }
+
+    fun setSubjectPlan(subjectId: String, durationMinutes: Int, restMinutes: Int) {
+        val s = preferences.timeTable.value
+        val updated = s.subjectSettings.toMutableMap()
+        updated[subjectId] = SubjectPlanSettings(durationMinutes = durationMinutes, restMinutes = restMinutes)
+        preferences.saveTimeTable(s.copy(subjectSettings = updated))
+    }
+
+    fun generateTimeTable() {
+        val settings = preferences.timeTable.value
+        val courses = preferences.studyCourses.value
+        if (courses.isEmpty()) return
+        val result = TimeTablePlanner.generate(
+            courses = courses,
+            previousClassIds = settings.generatedClassIds.toSet(),
+            settings = settings,
+            todayStartMillis = startOfToday()
+        )
+        preferences.saveStudyCourses(result.courses)
+        preferences.saveTimeTable(
+            settings.copy(entries = result.entries, generatedClassIds = result.generatedClassIds)
+        )
+        rescheduleStudyReminders()
+    }
+
+    private fun startOfToday(): Long = Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+
+    private fun rescheduleStudyReminders() {
+        StudyReminderScheduler.rescheduleAll(getApplication<Application>(), preferences.studyCourses.value)
+    }
+
+    private fun rescheduleAlertReminders() {
+        AlertReminderScheduler.rescheduleAll(getApplication<Application>(), preferences.alerts.value)
+    }
+
+    // ---------------------------------------------------------------------
+    // Backup & Restore
+    // ---------------------------------------------------------------------
+
+    fun exportAllData(): String = preferences.exportAllData()
+
+    fun importAllData(json: String): Boolean {
+        val ok = preferences.importAllData(json)
+        if (ok) {
+            rescheduleStudyReminders()
+            rescheduleAlertReminders()
+        }
+        return ok
+    }
 }

@@ -84,22 +84,16 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `preferences has more than 20 badges and unlocks them`() {
+    fun `preferences records sessions and app limits`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val prefs = LauncherPreferences(context)
-
-        // Verify Requirement 2: More than 20 badges
-        val allBadges = prefs.getAllBadges()
-        assertTrue("Expected more than 20 badges, got: ${allBadges.size}", allBadges.size > 20)
 
         prefs.setAppLimit("com.social.app", 30)
         assertEquals(30, prefs.appLimits.value["com.social.app"])
 
-        // Test completed session records and badge unlocks
+        // Test completed session records
         prefs.recordCompletedFocusSession(25)
         assertTrue(prefs.completedSessionsCount.value >= 1)
-        assertNotNull(prefs.latestBadge.value)
-        assertTrue(prefs.unlockedBadges.value.contains("b_first_session"))
     }
 
     @Test
@@ -121,17 +115,12 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `preferences manages separate widgets for notes reminders goals`() {
+    fun `preferences toggles notes widget visibility`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val prefs = LauncherPreferences(context)
         prefs.setShowNotes(false)
         assertFalse(prefs.showNotes.value)
         prefs.setShowNotes(true)
         assertTrue(prefs.showNotes.value)
-
-        prefs.setShowReminders(false)
-        assertFalse(prefs.showReminders.value)
-        prefs.setShowGoals(false)
-        assertFalse(prefs.showGoals.value)
     }
 }

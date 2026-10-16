@@ -1,5 +1,8 @@
 package com.example.ui.components
 
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -9,7 +12,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -19,13 +21,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,6 +36,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -43,42 +46,49 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.model.BannerItem
+import com.example.data.model.AlertItem
 import com.example.data.model.TaskItem
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WidgetsManagementSheet(
     showTime: Boolean,
     showDate: Boolean,
-    showNotes: Boolean,
-    showReminders: Boolean,
-    showGoals: Boolean,
+    showAlerts: Boolean,
     showTasks: Boolean,
-    banners: List<BannerItem>,
+    showStudyDue: Boolean,
+    alerts: List<AlertItem>,
     tasks: List<TaskItem>,
     onToggleShowTime: (Boolean) -> Unit,
     onToggleShowDate: (Boolean) -> Unit,
-    onToggleShowNotes: (Boolean) -> Unit,
-    onToggleShowReminders: (Boolean) -> Unit,
-    onToggleShowGoals: (Boolean) -> Unit,
+    onToggleShowAlerts: (Boolean) -> Unit,
     onToggleShowTasks: (Boolean) -> Unit,
-    onAddBanner: (BannerItem) -> Unit,
-    onRemoveBanner: (String) -> Unit,
+    onToggleShowStudyDue: (Boolean) -> Unit,
+    onAddAlert: (AlertItem) -> Unit,
+    onEditAlert: (AlertItem) -> Unit,
+    onRemoveAlert: (String) -> Unit,
     onAddTask: (String) -> Unit,
     onRemoveTask: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val context = LocalContext.current
 
-    var newBannerTitle by remember { mutableStateOf("") }
-    var newBannerContent by remember { mutableStateOf("") }
-    var newBannerCategory by remember { mutableStateOf("Note") }
-    var isCategoryDropdownExpanded by remember { mutableStateOf(false) }
+    var newAlertTitle by remember { mutableStateOf("") }
+    var newAlertContent by remember { mutableStateOf("") }
+    var newAlertTag by remember { mutableStateOf("") }
+    var newAlertReminder by remember { mutableStateOf<Long?>(null) }
+
+    var editingAlert by remember { mutableStateOf<AlertItem?>(null) }
 
     var newTaskInput by remember { mutableStateOf("") }
 
@@ -123,95 +133,30 @@ fun WidgetsManagementSheet(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Toggle Time
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Show Clock (Time)", style = MaterialTheme.typography.bodyLarge)
-                    Switch(checked = showTime, onCheckedChange = onToggleShowTime)
-                }
-
-                // Toggle Date
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Show Date", style = MaterialTheme.typography.bodyLarge)
-                    Switch(checked = showDate, onCheckedChange = onToggleShowDate)
-                }
-
-                // Toggle Notes
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Show Notes Widget", style = MaterialTheme.typography.bodyLarge)
-                    Switch(checked = showNotes, onCheckedChange = onToggleShowNotes)
-                }
-
-                // Toggle Reminders
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Show Reminders Widget", style = MaterialTheme.typography.bodyLarge)
-                    Switch(checked = showReminders, onCheckedChange = onToggleShowReminders)
-                }
-
-                // Toggle Goals
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Show Goals Widget", style = MaterialTheme.typography.bodyLarge)
-                    Switch(checked = showGoals, onCheckedChange = onToggleShowGoals)
-                }
-
-                // Toggle Tasks
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Show Tasks Checklist", style = MaterialTheme.typography.bodyLarge)
-                    Switch(checked = showTasks, onCheckedChange = onToggleShowTasks)
-                }
+                ToggleRow("Show Clock (Time)", showTime, onToggleShowTime)
+                ToggleRow("Show Date", showDate, onToggleShowDate)
+                ToggleRow("Show Alerts Widget", showAlerts, onToggleShowAlerts)
+                ToggleRow("Show Tasks Checklist", showTasks, onToggleShowTasks)
+                ToggleRow("Show Study Due (Next 7 days)", showStudyDue, onToggleShowStudyDue)
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-                // Banners Section
                 Text(
-                    text = "MANAGE NOTES, REMINDERS & GOALS",
+                    text = "MANAGE ALERTS (TAP TO EDIT)",
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
                 Spacer(modifier = Modifier.height(10.dp))
             }
 
-            // Existing banners
-            items(banners, key = { it.id }) { banner ->
+            // Existing alerts — tap a card to edit it
+            items(alerts, key = { it.id }) { alert ->
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 4.dp),
+                        .padding(vertical = 4.dp)
+                        .clickable { editingAlert = alert }
+                        .testTag("alert_row_${alert.id}"),
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -225,29 +170,57 @@ fun WidgetsManagementSheet(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (alert.category.isNotBlank()) {
+                                    Text(
+                                        text = "[${alert.category.uppercase()}]",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                }
                                 Text(
-                                    text = "[${banner.category.uppercase()}]",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = banner.title,
+                                    text = alert.title,
                                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
                                 )
                             }
                             Text(
-                                text = banner.content,
+                                text = alert.content,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                             )
+                            alert.reminderMillis?.let { millis ->
+                                Row(
+                                    modifier = Modifier.padding(top = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.NotificationsActive,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = formatDateTime(millis),
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
                         }
 
-                        IconButton(onClick = { onRemoveBanner(banner.id) }) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Edit Alert",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        IconButton(onClick = { onRemoveAlert(alert.id) }) {
                             Icon(
                                 imageVector = Icons.Default.Delete,
-                                contentDescription = "Delete Banner",
+                                contentDescription = "Delete Alert",
                                 tint = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.size(20.dp)
                             )
@@ -256,7 +229,7 @@ fun WidgetsManagementSheet(
                 }
             }
 
-            // Add new banner form
+            // Add new alert form
             item {
                 Spacer(modifier = Modifier.height(10.dp))
                 Card(
@@ -267,45 +240,12 @@ fun WidgetsManagementSheet(
                     )
                 ) {
                     Column(modifier = Modifier.padding(14.dp)) {
-                        Text("Add New Card", fontWeight = FontWeight.Medium, fontSize = 14.sp)
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        // Category Dropdown
-                        ExposedDropdownMenuBox(
-                            expanded = isCategoryDropdownExpanded,
-                            onExpandedChange = { isCategoryDropdownExpanded = !isCategoryDropdownExpanded }
-                        ) {
-                            OutlinedTextField(
-                                value = newBannerCategory,
-                                onValueChange = {},
-                                readOnly = true,
-                                label = { Text("Category") },
-                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isCategoryDropdownExpanded) },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .menuAnchor(androidx.compose.material3.MenuAnchorType.PrimaryNotEditable, true)
-                            )
-                            ExposedDropdownMenu(
-                                expanded = isCategoryDropdownExpanded,
-                                onDismissRequest = { isCategoryDropdownExpanded = false }
-                            ) {
-                                listOf("Note", "Reminder", "Goal").forEach { cat ->
-                                    DropdownMenuItem(
-                                        text = { Text(cat) },
-                                        onClick = {
-                                            newBannerCategory = cat
-                                            isCategoryDropdownExpanded = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
-
+                        Text("Add New Alert", fontWeight = FontWeight.Medium, fontSize = 14.sp)
                         Spacer(modifier = Modifier.height(8.dp))
 
                         OutlinedTextField(
-                            value = newBannerTitle,
-                            onValueChange = { newBannerTitle = it },
+                            value = newAlertTitle,
+                            onValueChange = { newAlertTitle = it },
                             label = { Text("Title") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
@@ -314,40 +254,69 @@ fun WidgetsManagementSheet(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         OutlinedTextField(
-                            value = newBannerContent,
-                            onValueChange = { newBannerContent = it },
-                            label = { Text("Details / Note / Reminder / Goal") },
+                            value = newAlertContent,
+                            onValueChange = { newAlertContent = it },
+                            label = { Text("Details") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        OutlinedTextField(
+                            value = newAlertTag,
+                            onValueChange = { newAlertTag = it },
+                            label = { Text("Tag (optional, custom)") },
+                            singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
 
                         Spacer(modifier = Modifier.height(10.dp))
 
+                        Text("Reminder (notification)", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                        Text(
+                            text = newAlertReminder?.let { formatDateTime(it) } ?: "Not set",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                        Row {
+                            TextButton(onClick = { showDateTimePicker(context, newAlertReminder) { newAlertReminder = it } }) {
+                                Text("Set date & time")
+                            }
+                            if (newAlertReminder != null) {
+                                TextButton(onClick = { newAlertReminder = null }) { Text("Clear") }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
                         Button(
                             onClick = {
-                                if (newBannerTitle.isNotBlank()) {
-                                    onAddBanner(
-                                        BannerItem(
-                                            title = newBannerTitle.trim(),
-                                            content = newBannerContent.trim(),
-                                            category = newBannerCategory
+                                if (newAlertTitle.isNotBlank()) {
+                                    onAddAlert(
+                                        AlertItem(
+                                            title = newAlertTitle.trim(),
+                                            content = newAlertContent.trim(),
+                                            category = newAlertTag.trim(),
+                                            reminderMillis = newAlertReminder
                                         )
                                     )
-                                    newBannerTitle = ""
-                                    newBannerContent = ""
+                                    newAlertTitle = ""
+                                    newAlertContent = ""
+                                    newAlertTag = ""
+                                    newAlertReminder = null
                                 }
                             },
                             modifier = Modifier.align(Alignment.End)
                         ) {
                             Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Add $newBannerCategory")
+                            Text("Add")
                         }
                     }
                 }
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-                // Tasks Section
                 Text(
                     text = "TASKS MANAGEMENT",
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
@@ -412,4 +381,138 @@ fun WidgetsManagementSheet(
             }
         }
     }
+
+    // Edit an existing alert
+    editingAlert?.let { original ->
+        AlertEditDialog(
+            original = original,
+            onSave = { updated ->
+                onEditAlert(updated)
+                editingAlert = null
+            },
+            onDismiss = { editingAlert = null }
+        )
+    }
+}
+
+@Composable
+private fun AlertEditDialog(
+    original: AlertItem,
+    onSave: (AlertItem) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    var title by remember { mutableStateOf(original.title) }
+    var content by remember { mutableStateOf(original.content) }
+    var tag by remember { mutableStateOf(original.category) }
+    var reminder by remember { mutableStateOf(original.reminderMillis) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit Alert", fontWeight = FontWeight.Bold) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Title") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = content,
+                    onValueChange = { content = it },
+                    label = { Text("Details") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = tag,
+                    onValueChange = { tag = it },
+                    label = { Text("Tag (optional, custom)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Text("Reminder (notification)", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                Text(
+                    text = reminder?.let { formatDateTime(it) } ?: "Not set",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+                Row {
+                    TextButton(onClick = { showDateTimePicker(context, reminder) { reminder = it } }) {
+                        Text("Set date & time")
+                    }
+                    if (reminder != null) {
+                        TextButton(onClick = { reminder = null }) { Text("Clear") }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                if (title.isNotBlank()) {
+                    onSave(
+                        original.copy(
+                            title = title.trim(),
+                            content = content.trim(),
+                            category = tag.trim(),
+                            reminderMillis = reminder
+                        )
+                    )
+                }
+            }) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+@Composable
+private fun ToggleRow(label: String, checked: Boolean, onToggle: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyLarge)
+        Switch(checked = checked, onCheckedChange = onToggle)
+    }
+}
+
+private fun formatDateTime(millis: Long): String =
+    SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()).format(Date(millis))
+
+private fun showDateTimePicker(context: Context, initial: Long?, onPicked: (Long) -> Unit) {
+    val base = Calendar.getInstance().apply { if (initial != null) timeInMillis = initial }
+    DatePickerDialog(
+        context,
+        { _, year, month, day ->
+            val picked = Calendar.getInstance().apply {
+                timeInMillis = base.timeInMillis
+                set(Calendar.YEAR, year)
+                set(Calendar.MONTH, month)
+                set(Calendar.DAY_OF_MONTH, day)
+            }
+            TimePickerDialog(
+                context,
+                { _, hour, minute ->
+                    picked.set(Calendar.HOUR_OF_DAY, hour)
+                    picked.set(Calendar.MINUTE, minute)
+                    picked.set(Calendar.SECOND, 0)
+                    picked.set(Calendar.MILLISECOND, 0)
+                    onPicked(picked.timeInMillis)
+                },
+                base.get(Calendar.HOUR_OF_DAY),
+                base.get(Calendar.MINUTE),
+                false
+            ).show()
+        },
+        base.get(Calendar.YEAR),
+        base.get(Calendar.MONTH),
+        base.get(Calendar.DAY_OF_MONTH)
+    ).show()
 }

@@ -16,17 +16,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Brightness4
-import androidx.compose.material.icons.filled.Brightness7
+import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Checklist
-import androidx.compose.material.icons.filled.EmojiEvents
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.HourglassTop
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.LockClock
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -36,7 +31,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -45,15 +39,11 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun SettingsScreen(
     isDarkTheme: Boolean,
-    isFocusModeActive: Boolean,
-    onToggleTheme: () -> Unit,
-    onOpenFocusModeSettings: () -> Unit,
-    onOpenFocusHistory: () -> Unit,
-    onOpenAppLimits: () -> Unit,
-    onOpenBadges: () -> Unit,
-    onOpenEditFavorites: () -> Unit,
-    onOpenArrangeFavorites: () -> Unit,
+    onOpenThemes: () -> Unit,
+    onOpenStudyManager: () -> Unit,
     onOpenWidgetsManagement: () -> Unit,
+    onOpenFavorites: () -> Unit,
+    onOpenBackupRestore: () -> Unit,
     onSetDefaultLauncher: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -68,7 +58,7 @@ fun SettingsScreen(
     ) {
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Title matching Screenshot 3
+        // Title
         Text(
             text = "Settings",
             style = MaterialTheme.typography.headlineMedium.copy(
@@ -90,142 +80,46 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // 1. Focus Mode Setup & Status
-        // During Focus Mode, this option is strictly NON-CLICKABLE as requested!
+        // 1. Themes (Pink, Green, Saffron, Seattle, Ocean, Lavender) + Night Mode
         SettingsItemRow(
-            title = if (isFocusModeActive) "Focus Mode (Locked)" else "Focus Mode",
-            subtitle = if (isFocusModeActive) "🔒 Non-clickable during active session • Long-press timer 3s to end" else "Allowed apps, silent alerts & Pomodoro timer",
+            title = "Themes",
+            subtitle = "Pink, Green, Saffron, Seattle, Ocean, Lavender & Night Mode",
             icon = {
                 Icon(
-                    imageVector = if (isFocusModeActive) Icons.Default.Lock else Icons.Default.HourglassTop,
-                    contentDescription = null,
-                    tint = if (isFocusModeActive) Color(0xFFE53935) else MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp)
-                )
-            },
-            enabled = !isFocusModeActive,
-            onClick = {
-                if (!isFocusModeActive) {
-                    onOpenFocusModeSettings()
-                }
-            },
-            testTag = "settings_focus_mode"
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // 1b. Focus History (Save & Custom Duration Clear)
-        SettingsItemRow(
-            title = "Focus History",
-            subtitle = "View completed sessions & clear by custom date/time",
-            icon = {
-                Icon(
-                    imageVector = Icons.Default.History,
+                    imageVector = Icons.Default.Palette,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
                 )
             },
-            onClick = onOpenFocusHistory,
-            testTag = "settings_focus_history"
+            onClick = onOpenThemes,
+            testTag = "settings_themes"
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // 2. App Usage Time & Limits
+        // 2. Study Manager
         SettingsItemRow(
-            title = "App Use Time & Limits",
-            subtitle = "Track daily screen time & instant app limit lock",
+            title = "Study Manager",
+            subtitle = "Courses > Subjects > Topics > Classes, deadlines & reminders",
             icon = {
                 Icon(
-                    imageVector = Icons.Default.LockClock,
+                    imageVector = Icons.Default.School,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
                 )
             },
-            onClick = onOpenAppLimits,
-            testTag = "settings_app_limits"
+            onClick = onOpenStudyManager,
+            testTag = "settings_study_manager"
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // 3. Focus Badges & Milestones (35+ badges)
-        SettingsItemRow(
-            title = "Focus Badges & Streaks",
-            subtitle = "View 35+ unlocked badges & streak milestones",
-            icon = {
-                Icon(
-                    imageVector = Icons.Default.EmojiEvents,
-                    contentDescription = null,
-                    tint = Color(0xFFFFB300),
-                    modifier = Modifier.size(24.dp)
-                )
-            },
-            onClick = onOpenBadges,
-            testTag = "settings_badges"
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // 4. Change Theme
-        SettingsItemRow(
-            title = "Change Theme",
-            subtitle = if (isDarkTheme) "Night (Dark Black)" else "Day (Bright White)",
-            icon = {
-                Icon(
-                    imageVector = if (isDarkTheme) Icons.Default.Brightness4 else Icons.Default.Brightness7,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp)
-                )
-            },
-            onClick = onToggleTheme,
-            testTag = "settings_change_theme"
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // 5. Edit Favorites (Select & Checkbox list)
-        SettingsItemRow(
-            title = "Edit Favorites",
-            subtitle = "Select apps to pin on the Home Screen",
-            icon = {
-                Icon(
-                    imageVector = Icons.Default.Star,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp)
-                )
-            },
-            onClick = onOpenEditFavorites,
-            testTag = "settings_edit_favorites"
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // 6. Arrange / Reorder Favorites
-        SettingsItemRow(
-            title = "Arrange Favorites",
-            subtitle = "Reorder or remove pinned apps",
-            icon = {
-                Icon(
-                    imageVector = Icons.Default.SwapVert,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp)
-                )
-            },
-            onClick = onOpenArrangeFavorites,
-            testTag = "settings_arrange_favorites"
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // 7. Widgets Configuration (Notes, Reminders, Goals, Tasks, Clock, Date)
+        // 3. Widgets (Clock, Date, Alerts, Tasks, Study Due)
         SettingsItemRow(
             title = "Widgets",
-            subtitle = "Manage separate Notes, Reminders & Goals widgets",
+            subtitle = "Manage the Clock, Date, Alerts, Tasks & Study widgets",
             icon = {
                 Icon(
                     imageVector = Icons.Default.Checklist,
@@ -240,7 +134,43 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // 8. Set Default Launcher
+        // 4. Favorites (pick apps for the Home Screen + drag to reorder)
+        SettingsItemRow(
+            title = "Favorites",
+            subtitle = "Pick apps for the Home Screen and drag to reorder",
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Star,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+            },
+            onClick = onOpenFavorites,
+            testTag = "settings_favorites"
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 5. Backup & Restore
+        SettingsItemRow(
+            title = "Backup & Restore",
+            subtitle = "Save or restore all settings, alerts, tasks and study data",
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Backup,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+            },
+            onClick = onOpenBackupRestore,
+            testTag = "settings_backup_restore"
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 6. Set Default Launcher
         SettingsItemRow(
             title = "Set Default Launcher",
             subtitle = "Set SP Launcher as system home screen",
