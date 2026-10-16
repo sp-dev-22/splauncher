@@ -1,10 +1,14 @@
 package com.example.ui
 
 import android.app.Application
+import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.model.AlertItem
 import com.example.data.model.AppInfo
+import com.example.data.model.CardStats
+import com.example.data.model.FlashcardItem
 import com.example.data.model.StudyCourse
 import com.example.data.model.StudyDueItem
 import com.example.data.model.TaskItem
@@ -13,8 +17,11 @@ import com.example.data.repository.AppRepository
 import com.example.data.repository.LauncherPreferences
 import com.example.data.model.SubjectPlanSettings
 import com.example.data.model.TimeTableSettings
+import com.example.data.model.StudyPopupSettings
 import com.example.service.AlertReminderScheduler
+import com.example.service.StudyPopupScheduler
 import com.example.service.StudyReminderScheduler
+import com.example.util.CardFileParser
 import com.example.util.TimeTablePlanner
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -22,8 +29,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Calendar
 
 class LauncherViewModel(application: Application) : AndroidViewModel(application) {
@@ -48,6 +57,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     val alerts = preferences.alerts
     val tasks = preferences.tasks
     val timeTable = preferences.timeTable
+    val flashcardBank = preferences.flashcardBank
+    val popupSettings = preferences.popupSettings
 
     // Study Manager tree
     val studyCourses: StateFlow<List<StudyCourse>> = preferences.studyCourses
@@ -106,6 +117,27 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val _showTimeTable = MutableStateFlow(false)
     val showTimeTable: StateFlow<Boolean> = _showTimeTable.asStateFlow()
 
+    private val _showStudyPopups = MutableStateFlow(false)
+    val showStudyPopups: StateFlow<Boolean> = _showStudyPopups.asStateFlow()
+
+    private val _cardImportCount = MutableStateFlow<Int?>(null)
+    val cardImportCount: StateFlow<Int?> = _cardImportCount.asStateFlow()
+
+    private val _showCards = MutableStateFlow(false)
+    val showCards: StateFlow<Boolean> = _showCards.asStateFlow()
+
+    val cardStats: StateFlow<CardStats> = flashcardBank
+        .map { cards ->
+            val today = startOfToday()
+            CardStats(
+                total = cards.size,
+                mastered = cards.count { it.locked },
+                due = cards.count { !it.locked && (it.nextDueMillis == null || it.nextDueMillis <= System.currentTimeMillis()) },
+                masteredToday = cards.count { it.masteredAtMillis != null && it.masteredAtMillis >= today }
+            )
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), CardStats())
+
     // Filtered apps for the App Drawer (search only)
     val filteredApps: StateFlow<List<AppInfo>> =
         combine(_installedApps, _searchQuery) { apps, query ->
@@ -125,6 +157,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         // Re-arm any pending Alerts and Study Manager reminders on launch.
         rescheduleAlertReminders()
         rescheduleStudyReminders()
+        StudyPopupScheduler.reschedule(application, preferences.popupSettings.value)
     }
 
     fun loadApps() {
@@ -262,6 +295,10 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun setShowTimeTable(show: Boolean) {
         _showTimeTable.value = show
+    }
+
+    fun setShowStudyPopups(show: Boolean) {
+        _showStudyPopups.value = show
     }
 
     // Smart App Launching (no usage limits any more — just launch)
@@ -406,6 +443,82 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         set(Calendar.MILLISECOND, 0)
     }.timeInMillis
 
+    // ---------------------------------------------------------------------
+    // Study Popups
+    // ---------------------------------------------------------------------
+
+    private fun savePopupSettings(s: StudyPopupSettings) {
+        preferences.savePopupSettings(s)
+        StudyPopupScheduler.reschedule(getApplication<Application>(), s)
+    }
+
+    fun setPopupEnabled(enabled: Boolean) =
+        savePopupSettings(preferences.popupSettings.value.copy(enabled = enabled))
+
+    fun setPopupWindow(startMinutes: Int, endMinutes: Int) =
+        savePopupSettings(preferences.popupSettings.value.copy(startMinutes = startMinutes, stopMinutes = endMinutes))
+
+    fun setPopupInterval(minutes: Int) =
+        savePopupSettings(preferences.popupSettings.value.copy(intervalMinutes = minutes))
+
+    /** Reads one or more card files (JSON) and adds every card it finds. */
+    fun importCardFiles(uris: List<Uri>) {
+        viewModelScope.launch {
+            val existing = preferences.flashcardBank.value.toMutableList()
+            var added = 0
+            for (uri in uris) {
+                val text = withContext(Dispatchers.IO) {
+                    try {
+                        getApplication<Application>().contentResolver.openInputStream(uri)
+                            ?.use { it.readBytes().decodeToString() }
+                    } catch (_: Exception) { null }
+                } ?: continue
+                val deck = displayName(uri) ?: "file"
+                val cards = CardFileParser.parse(text, deck)
+                existing.addAll(cards)
+                added += cards.size
+            }
+            if (added > 0) preferences.saveFlashcardBank(existing)
+            _cardImportCount.value = added
+        }
+    }
+
+    fun clearCards() {
+        preferences.saveFlashcardBank(emptyList())
+        _cardImportCount.value = null
+    }
+
+    fun setShowCards(show: Boolean) {
+        _showCards.value = show
+    }
+
+    fun updateCard(card: FlashcardItem) {
+        preferences.updateCard(card)
+    }
+
+    fun deleteCard(id: String) {
+        preferences.deleteCard(id)
+    }
+
+    /** Turns a whole deck on or off for the popups. */
+    fun setDeckEnabled(deck: String, enabled: Boolean) {
+        val s = preferences.popupSettings.value
+        val disabled = s.disabledDecks.toMutableList()
+        if (enabled) {
+            disabled.remove(deck)
+        } else if (!disabled.contains(deck)) {
+            disabled.add(deck)
+        }
+        savePopupSettings(s.copy(disabledDecks = disabled))
+    }
+
+    private fun displayName(uri: Uri): String? = try {
+        getApplication<Application>().contentResolver.query(uri, null, null, null, null)?.use { cur ->
+            val idx = cur.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (idx >= 0 && cur.moveToFirst()) cur.getString(idx) else null
+        }
+    } catch (_: Exception) { null }
+
     private fun rescheduleStudyReminders() {
         StudyReminderScheduler.rescheduleAll(getApplication<Application>(), preferences.studyCourses.value)
     }
@@ -425,6 +538,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         if (ok) {
             rescheduleStudyReminders()
             rescheduleAlertReminders()
+            StudyPopupScheduler.reschedule(getApplication<Application>(), preferences.popupSettings.value)
         }
         return ok
     }

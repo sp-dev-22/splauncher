@@ -3,6 +3,8 @@ package com.example.data.repository
 import android.content.Context
 import android.content.SharedPreferences
 import com.example.data.model.AlertItem
+import com.example.data.model.FlashcardItem
+import com.example.data.model.StudyPopupSettings
 import com.example.data.model.SubjectPlanSettings
 import com.example.data.model.TimeTableEntry
 import com.example.data.model.TimeTableSettings
@@ -60,6 +62,13 @@ class LauncherPreferences(context: Context) {
     // Quick Time Table (settings + last generated plan)
     private val _timeTable = MutableStateFlow(loadTimeTable())
     val timeTable: StateFlow<TimeTableSettings> = _timeTable.asStateFlow()
+
+    // Study Popups (cards + their schedule)
+    private val _flashcardBank = MutableStateFlow(loadFlashcardBank())
+    val flashcardBank: StateFlow<List<FlashcardItem>> = _flashcardBank.asStateFlow()
+
+    private val _popupSettings = MutableStateFlow(loadPopupSettings())
+    val popupSettings: StateFlow<StudyPopupSettings> = _popupSettings.asStateFlow()
 
     fun setNightMode(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_NIGHT_MODE, enabled).apply()
@@ -672,6 +681,89 @@ class LauncherPreferences(context: Context) {
     }
 
     // ---------------------------------------------------------------------
+    // Study Popups (MCQ + flashcard banks and their schedule)
+    // ---------------------------------------------------------------------
+
+    fun saveFlashcardBank(list: List<FlashcardItem>) {
+        val arr = JSONArray()
+        for (c in list) {
+            arr.put(JSONObject().apply {
+                put("id", c.id)
+                put("front", c.front)
+                put("back", c.back)
+                put("locked", c.locked)
+                put("repeatStage", c.repeatStage)
+                c.nextDueMillis?.let { put("nextDueMillis", it) }
+                put("deck", c.deck)
+                c.masteredAtMillis?.let { put("masteredAtMillis", it) }
+            })
+        }
+        prefs.edit().putString(KEY_FLASHCARD_BANK, arr.toString()).apply()
+        _flashcardBank.value = list
+    }
+
+    fun savePopupSettings(s: StudyPopupSettings) {
+        prefs.edit().putString(KEY_POPUP_SETTINGS, JSONObject().apply {
+            put("enabled", s.enabled)
+            put("start", s.startMinutes)
+            put("stop", s.stopMinutes)
+            put("interval", s.intervalMinutes)
+            val decks = JSONArray(); s.disabledDecks.forEach { decks.put(it) }
+            put("disabledDecks", decks)
+        }.toString()).apply()
+        _popupSettings.value = s
+    }
+
+    fun updateCard(card: FlashcardItem) {
+        saveFlashcardBank(_flashcardBank.value.map { if (it.id == card.id) card else it })
+    }
+
+    fun deleteCard(id: String) {
+        saveFlashcardBank(_flashcardBank.value.filterNot { it.id == id })
+    }
+
+    private fun loadFlashcardBank(): List<FlashcardItem> {
+        val raw = prefs.getString(KEY_FLASHCARD_BANK, null) ?: return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            val list = mutableListOf<FlashcardItem>()
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                list.add(
+                    FlashcardItem(
+                        id = o.optString("id", java.util.UUID.randomUUID().toString()),
+                        front = o.optString("front", ""),
+                        back = o.optString("back", ""),
+                        locked = o.optBoolean("locked", false),
+                        repeatStage = o.optInt("repeatStage", 0),
+                        nextDueMillis = if (o.has("nextDueMillis")) o.optLong("nextDueMillis") else null,
+                        deck = o.optString("deck", ""),
+                        masteredAtMillis = if (o.has("masteredAtMillis")) o.optLong("masteredAtMillis") else null
+                    )
+                )
+            }
+            list
+        } catch (_: Exception) { emptyList() }
+    }
+
+    private fun loadPopupSettings(): StudyPopupSettings {
+        val raw = prefs.getString(KEY_POPUP_SETTINGS, null) ?: return StudyPopupSettings()
+        return try {
+            val o = JSONObject(raw)
+            val decksArr = o.optJSONArray("disabledDecks") ?: JSONArray()
+            val decks = mutableListOf<String>()
+            for (i in 0 until decksArr.length()) decks.add(decksArr.getString(i))
+            StudyPopupSettings(
+                enabled = o.optBoolean("enabled", false),
+                startMinutes = o.optInt("start", 9 * 60),
+                stopMinutes = o.optInt("stop", 21 * 60),
+                intervalMinutes = o.optInt("interval", 10),
+                disabledDecks = decks
+            )
+        } catch (_: Exception) { StudyPopupSettings() }
+    }
+
+    // ---------------------------------------------------------------------
     // Backup & Restore (whole-app export / import)
     // ---------------------------------------------------------------------
 
@@ -747,6 +839,8 @@ class LauncherPreferences(context: Context) {
         _tasks.value = loadTasks()
         _studyCourses.value = loadStudyCourses()
         _timeTable.value = loadTimeTable()
+        _flashcardBank.value = loadFlashcardBank()
+        _popupSettings.value = loadPopupSettings()
     }
 
     companion object {
@@ -762,5 +856,7 @@ class LauncherPreferences(context: Context) {
         private const val KEY_THEME = "theme_key"
         private const val KEY_SHOW_STUDY_DUE = "show_study_due"
         private const val KEY_TIMETABLE = "timetable_settings"
+        private const val KEY_FLASHCARD_BANK = "flashcard_bank"
+        private const val KEY_POPUP_SETTINGS = "study_popup_settings"
     }
 }

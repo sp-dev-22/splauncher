@@ -19,10 +19,12 @@ import com.example.ui.components.FavoritesScreen
 import com.example.ui.components.ThemesSheet
 import com.example.ui.components.WidgetsManagementSheet
 import com.example.ui.screens.BackupRestoreScreen
+import com.example.ui.screens.CardsScreen
 import com.example.ui.screens.DrawerScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.StudyManagerScreen
+import com.example.ui.screens.StudyPopupsScreen
 import com.example.ui.screens.TimeTableScreen
 import com.example.ui.theme.LauncherTheme
 import kotlinx.coroutines.launch
@@ -62,12 +64,17 @@ fun MainScreen(
     val showStudyManager by viewModel.showStudyManager.collectAsState()
     val showBackupRestore by viewModel.showBackupRestore.collectAsState()
     val showTimeTable by viewModel.showTimeTable.collectAsState()
+    val showStudyPopups by viewModel.showStudyPopups.collectAsState()
+    val showCards by viewModel.showCards.collectAsState()
+    val cardStats by viewModel.cardStats.collectAsState()
 
     // Back handling: when not on Center Home page (page 1), pressing Back scrolls back to Home page
     BackHandler(
-        enabled = pagerState.currentPage != 1 || showAddFavoritesScreen || showStudyManager || showBackupRestore || showTimeTable
+        enabled = pagerState.currentPage != 1 || showAddFavoritesScreen || showStudyManager || showBackupRestore || showTimeTable || showStudyPopups || showCards
     ) {
         when {
+            showCards -> viewModel.setShowCards(false)
+            showStudyPopups -> viewModel.setShowStudyPopups(false)
             showTimeTable -> viewModel.setShowTimeTable(false)
             showStudyManager -> viewModel.setShowStudyManager(false)
             showBackupRestore -> viewModel.setShowBackupRestore(false)
@@ -98,6 +105,7 @@ fun MainScreen(
                             isDarkTheme = isDarkTheme,
                             onOpenThemes = { viewModel.setShowThemesSheet(true) },
                             onOpenStudyManager = { viewModel.setShowStudyManager(true) },
+                            onOpenStudyPopups = { viewModel.setShowStudyPopups(true) },
                             onOpenWidgetsManagement = { viewModel.setShowWidgetsDialog(true) },
                             onOpenFavorites = { viewModel.setShowAddFavoritesScreen(true) },
                             onOpenBackupRestore = { viewModel.setShowBackupRestore(true) },
@@ -117,6 +125,7 @@ fun MainScreen(
                             tasks = tasks,
                             showStudyDue = showStudyDue,
                             studyDueItems = studyDueItems,
+                            cardsStats = cardStats,
                             isDarkTheme = isDarkTheme,
                             onAppClick = { app -> viewModel.launchApp(app) },
                             onAppLongClick = { app -> viewModel.setShowAddFavoritesScreen(true) },
@@ -124,6 +133,7 @@ fun MainScreen(
                             onAddTask = { text -> viewModel.addTask(text) },
                             onOpenWidgetsManagement = { viewModel.setShowWidgetsDialog(true) },
                             onOpenStudyManager = { viewModel.setShowStudyManager(true) },
+                            onOpenCards = { viewModel.setShowCards(true) },
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -175,6 +185,22 @@ fun MainScreen(
                 TimeTableScreen(
                     viewModel = viewModel,
                     onBack = { viewModel.setShowTimeTable(false) }
+                )
+            }
+
+            // Fullscreen Study Popups
+            if (showStudyPopups) {
+                StudyPopupsScreen(
+                    viewModel = viewModel,
+                    onBack = { viewModel.setShowStudyPopups(false) }
+                )
+            }
+
+            // Fullscreen Cards (browse / edit / decks)
+            if (showCards) {
+                CardsScreen(
+                    viewModel = viewModel,
+                    onBack = { viewModel.setShowCards(false) }
                 )
             }
         }
